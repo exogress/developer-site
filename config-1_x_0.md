@@ -73,7 +73,6 @@ There are different kinds of segment(s) matchers available:
 Array notation for path segments doesn't cover if path ends with `/` or not. `trailing-slash` is used for that. Possible
 values are: `require`, `allow`, and `deny`
 
-
 ### Query Matcher
 
 Query matchers are used to match the GET query parameters. They are mostly similar to path matchers, but have some
@@ -84,9 +83,9 @@ differences.
 - Any number of segments. `*` is just like `?` but allows `/` symbol
 - Choice. Any of the provided values are allowed on the position
 - Regular Expression. Segment starting and eding with `/` symbol is treated as a regular excpression.
-- `~` (yaml notation for nil). Optionally any value. Used only to capture the value, does not affects the filtering.
+- `~` (yaml notation for `nil`). Optionally any value. Used only to capture the value, does not affects the filtering.
 
-### Exception
+### Exceptions
 
 Exogress uses the concept of exceptions, just like most of the modern programming languages. Configuration may
 explicitly instruct Exogress servers to throw the exception, or it may occur due to the incorrect configuration file,
@@ -215,6 +214,60 @@ static-responses:
         content: "<html><body>It works!</body></html>"
         engine: handlebars
 ```
+
+#### Redirections
+
+Redirection is a kind of static-response. There are multiple status-codes fo redirection. User may choose which one to
+use:
+
+- `moved-permanently`
+- `permanent-redirect`
+- `found`
+- `see-other`
+- `temporary-redirect`
+- `multiple-choices`
+- `not-modified`
+
+Redirection destination may be defined in different forms:
+
+- String (e.g. `https://google.com`). The exact destination
+- Path segments array. e.g. `["seg1"]`
+- Path segments array starting with the protocol and host name. e.g. `["https://google.com", "seg1"]`
+
+Path segments may contain substitution to customize redirects based on the reequest.
+
+```yaml
+rules:
+  - filter:
+      path: ["?"]
+    action: respond
+    static-response:
+      kind: redirect
+      destination: ["a-{{ 0 }}-z"]
+      redirect-type: moved-permanently
+```
+
+And with query parameters:
+
+```yaml
+rules:
+  - filter:
+      path: []
+      query-params:
+        search: "*"
+    action: respond
+    static-response:
+      kind: redirect
+      destination: ["https://google.com", "search"]
+      query-params:
+        strategy: remove
+        set:
+          q: "{{ search }}"
+      redirect-type: moved-permanently
+```
+
+`query-params` contains thee `strategy` field which may be one of `remove` and `keep`.
+
 
 ### Scope of static-responses and catch blocks
 
