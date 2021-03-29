@@ -23,9 +23,68 @@ step-by-step.
 
 ### Rule
 
-Each handler contains the `rule` block, which defines how handler should react on the request depending on it's path,
+Each handler contains the `rule` block, which defines how handler should react on the request depending on its path,
 query parameters, headers, etc. As a result of rule processing, the handler may be invoked, skipped, perform
 static-response or throw the exception.
+
+Example:
+
+```yaml
+rules:
+  - filter:
+      path: [ "none" ]
+    action: next-handler
+  - filter:
+      path: [ "*" ]
+    action: invoke
+```
+
+Filter is used to check if the rule should be applied to the request. Filter contains the following fields:
+
+```yaml
+filter:
+  path: [ "segment1", "segment2" ]
+  trailing-slash: require|allow|deny
+  methods:
+    - GET
+    - POST
+    - PUT
+    - ...
+  query-params:
+    query-params:
+      q1: "?"
+      ..
+```
+
+### Path Matcher and trailing slash policy
+
+Exogress treats patch segment as a first class citizen, so that you defined rules based on arrays of segments, not the
+whole path matchers.
+
+There are different kinds of segment(s) matchers available:
+
+- Strict match. The simple string will be strictly matched
+- Any segment. `?` symbol is used to match against any segment on the position
+- Any number of segments. `*` is used when any number of segments is allowed. This symbol may be used only once in the
+  path matcher.
+- Choice. If the segment is an array, any of the provided values are allowed on the position
+- Regular Expression. Segment starting and ending with `/` symbol is treated as a regular expression.
+
+Array notation for path segments doesn't cover if path ends with `/` or not. `trailing-slash` is used for that. Possible
+values are: `require`, `allow`, and `deny`
+
+
+### Query Matcher
+
+Query matchers are used to match the GET query parameters. They are mostly similar to path matchers, but have some
+differences.
+
+- Strict match. The simple string will be strictly matched
+- Any segment. `?` symbol is used to match parameter value that doesn't contain `/` and exists
+- Any number of segments. `*` is just like `?` but allows `/` symbol
+- Choice. Any of the provided values are allowed on the position
+- Regular Expression. Segment starting and eding with `/` symbol is treated as a regular excpression.
+- `~` (yaml notation for nil). Optionally any value. Used only to capture the value, does not affects the filtering.
 
 ### Exception
 
@@ -133,18 +192,18 @@ mount-points:
         priority: 10
         rules:
           - filter:
-              path: ["ref"]
+              path: [ "ref" ]
             action: respond
             static-response: it-works
           - filter:
-              path: ["embed"]
+              path: [ "embed" ]
             action: respond
             static-response:
               kind: redirect
               destination: "https://google.com/"
               redirect-type: moved-permanently
           - filter:
-              path: ["param"]
+              path: [ "param" ]
             action: respond
             static-response: "@static-resp-param"
 static-responses:
