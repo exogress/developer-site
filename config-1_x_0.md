@@ -266,7 +266,12 @@ rules:
       redirect-type: moved-permanently
 ```
 
-`query-params` contains thee `strategy` field which may be one of `remove` and `keep`.
+`query-params` contains thee `strategy` field which may be one of `remove` and `keep`. Strategy defies how to deal with query parameters from initial request.
+
+- `keep` save all parameters but removes parameters defined in `remove` array
+- `remove` deletes all parameters but keep parameters defined in `keep` array
+
+In addition to that, `set` object defines query parameters which will be set. Values support substitutions.
 
 
 ### Scope of static-responses and catch blocks
