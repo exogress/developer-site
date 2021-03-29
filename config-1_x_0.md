@@ -105,8 +105,8 @@ differences.
 - Any segment. `?` symbol is used to match parameter value that doesn't contain `/` and exists
 - Any number of segments. `*` is just like `?` but allows `/` symbol
 - Choice. Any of the provided values are allowed on the position
-- Regular Expression. Segment starting and eding with `/` symbol is treated as a regular excpression.
-- `~` (yaml notation for `nil`). Optionally any value. Used only to capture the value, does not affects the filtering.
+- Regular Expression. Segment starting and ending with `/` symbol is treated as a regular expression.
+- `~` (yaml notation for `nil`). Optionally any value. Used only to capture the value, does not affect the filtering.
 
 ### Exceptions
 
@@ -129,7 +129,7 @@ proxy-error:upstream-unreachable:connection-rejected
 ```
 
 means that this exception belongs to the exception class `proxy-error` and it's
-subclass `proxy-error:upstream-unreachable`. This is useful in the the rescue blocks, so that we don't need to point all
+subclass `proxy-error:upstream-unreachable`. This is useful in the rescue blocks, so that we don't need to point all
 possible exceptions which should lead, for example, to "Gateway Error" page, but just use the parent segment:
 
 ```yaml
@@ -162,7 +162,7 @@ or
 status-code:5xx
 ```
 
-This rescue blocks are applied whe the response is successfuly generated, and we need to customize the behavior
+This rescue blocks are applied whe the response is successfully generated, and we need to customize the behavior
 depending on the resulting status code.
 
 Status-code matcher may be in the one of the following forms:
@@ -257,7 +257,7 @@ Redirection destination may be defined in different forms:
 - Path segments array. e.g. `["seg1"]`
 - Path segments array starting with the protocol and host name. e.g. `["https://google.com", "seg1"]`
 
-Path segments may contain substitution to customize redirects based on the reequest.
+Path segments may contain substitution to customize redirects based on the request.
 
 ```yaml
 rules:
@@ -312,7 +312,7 @@ The visibility of the particular item depends on where it is defined. Generally,
 3. Mount Point Project config with the same mount point name
 4. Mount Point client config with the same mount point name and config name
 5. Handler Project config with the same handler and mount point name
-6. Handler client config with the same mount point name and config name and a handler name
+6. Handler client config with the same mount point name and config name, and a handler name
 
 In other worlds, static responses defined in the Top-level Project config is visible to any configuration block in the
 project configuration, while static responses defined on the mount-point level in client config will be visible on this
@@ -515,7 +515,7 @@ kind: gcs-bucket
 priority: 10
 bucket:
   name: my-test-bucket
-credentials: "@gcs-creds"
+credentials: "@gcs-credentials"
 ```
 
 Both `bucket` and `credentials` may be stored in parameters.
@@ -535,6 +535,8 @@ google:
   acl: "@google-acl"
 priority: 10
 ```
+
+`acl` may be stored in parameters.
 
 ### `pass-through`
 
@@ -573,8 +575,8 @@ enabled and not affected by selected profile.
 
 ## Cache
 
-Edge cache may be enable and disable on per-handler basis. Exogress respects HTTP headers and will cache responses which
-contain the appropriate `Cache-Control` headers.
+Edge cache may be enabled and disabled on per-handler basis. Exogress respects HTTP headers and will cache responses
+which contain the appropriate `Cache-Control` headers.
 
 TODO: more about caching
 
@@ -633,8 +635,90 @@ upstreams:
     port: 11988
 ```
 
-Note, that Exogress may skip optimizations on per-request basis, depending on many conditions. Typically requestss that
+Note, that Exogress may skip optimizations on per-request basis, depending on many conditions. Typically, requests that
 are not eligible for caching will not be converted to WebP.
 
 ## Modifications
+
+Exogress supports both request and response modifications.
+
+### Requests Modifications
+
+Most of the handlers proxy the incoming request to some other destination. Often it is required to modify the request,
+when it goes to its destination. This can be reached through [base paths](/config-1_x_0?id=handlers) and through
+the `modify-request` rule config option.
+
+```yaml
+---
+version: 1.0.0
+revision: 1
+name: modifications
+mount-points:
+  default:
+    handlers:
+      dir:
+        kind: proxy
+        upstream: upstream
+        priority: 10
+        rules:
+          - filter:
+              path: [ "?" ]
+            action: invoke
+            modify-request:
+              path: [ "{{ 1 }}", "modified" ]
+              trailing-slash: unset
+              query-params:
+                strategy: keep
+                remove:
+                  - q2
+              headers:
+                insert:
+                  "x-inserted": "yes"
+                  "x-sent-from-client3": "rewrite"
+                append:
+                  "x-sent-from-client2": "appended"
+                remove:
+                  - "x-sent-from-client"
+upstreams:
+  upstream:
+    port: 11988
+```
+
+### Response Modifications
+
+Sometimes it is required to modify the response, after it is generated. The most typical scenario is to enable the
+caching through the `Cache-Control` header.
+
+```yaml
+---
+version: 1.0.0
+revision: 1
+name: modifications
+mount-points:
+  default:
+    handlers:
+      dir:
+        kind: proxy
+        upstream: upstream
+        priority: 10
+        rules:
+          - filter:
+              path: ["*"]
+            action: invoke
+            on-response:
+              - when:
+                  status-code: "2xx"
+                modifications:
+                  headers:
+                    insert:
+                      "x-inserted": "yes"
+                    append:
+                      "x-appended": "yes"
+                    remove:
+                      - "x-remove"
+upstreams:
+  upstream:
+    port: 11988
+```
+
 
