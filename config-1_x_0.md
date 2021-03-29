@@ -14,14 +14,37 @@ handler documentation entry contains the information on which type of config is 
 
 ### Mount Point
 
-Mount point is an identifier, which is used to connect the configuration with domain name
+Mount point is an identifier, which is used to connect the configuration with domain
+name. [Learn more](/config-1_x_0?id=mount-points)
 
-### Handler
+### Handlers
 
-Handler performs the actual work. Handlers are ordered by the `priority` field under the mount point, and are invoked
+Handlers perform the actual work. Handlers are ordered by the `priority` field under the mount point, and are invoked
 step-by-step.
 
-### Rule
+Each handler contains the following fields:
+
+- `base-path` and `replace-base-path`. Handler may be places under the different root. For instance, imaging you want to
+  serve uploads from the S3 buckets under the path prefix `/uploads/`. Files in S3 bucket are stored in the root dir,
+  not prefixed with `/uploads`. This is the handler configuration which make it work:
+
+```yaml
+uploads:
+  kind: s3-bucket
+  priority: 10
+  bucket:
+    name: my-test-bucket
+    region: us-west-2
+  base-path: [ "uploads" ]
+  replace-base-path: [ ]
+```
+
+- `priority`. Gateway servers will apply handlers according to the priority. It starts from the smallest priority,
+  moving to the larger values. Priority lives in a mount point, and the end ordering may include handlers from different
+  configs.
+- `rules` see [Rules section](/config-1_x_0?id=rules)
+
+#### Rules
 
 Each handler contains the `rule` block, which defines how handler should react on the request depending on its path,
 query parameters, headers, etc. As a result of rule processing, the handler may be invoked, skipped, perform
@@ -239,11 +262,11 @@ Path segments may contain substitution to customize redirects based on the reequ
 ```yaml
 rules:
   - filter:
-      path: ["?"]
+      path: [ "?" ]
     action: respond
     static-response:
       kind: redirect
-      destination: ["a-{{ 0 }}-z"]
+      destination: [ "a-{{ 0 }}-z" ]
       redirect-type: moved-permanently
 ```
 
@@ -252,13 +275,13 @@ And with query parameters:
 ```yaml
 rules:
   - filter:
-      path: []
+      path: [ ]
       query-params:
         search: "*"
     action: respond
     static-response:
       kind: redirect
-      destination: ["https://google.com", "search"]
+      destination: [ "https://google.com", "search" ]
       query-params:
         strategy: remove
         set:
@@ -266,13 +289,13 @@ rules:
       redirect-type: moved-permanently
 ```
 
-`query-params` contains thee `strategy` field which may be one of `remove` and `keep`. Strategy defies how to deal with query parameters from initial request.
+`query-params` contains the `strategy` field which may be one of `remove` and `keep`. Strategy defies how to deal with
+query parameters from initial request.
 
 - `keep` save all parameters but removes parameters defined in `remove` array
 - `remove` deletes all parameters but keep parameters defined in `keep` array
 
 In addition to that, `set` object defines query parameters which will be set. Values support substitutions.
-
 
 ### Scope of static-responses and catch blocks
 
@@ -346,136 +369,272 @@ perform a rolling-upgrade. Otherwise, the new config will never be applied if at
 A list of mount points where this config will load its handlers. A hash-map, where keys are mount points, and the values
 are the mount point body.
 
+Mount Point is identified by name. Mount Point body contains mount-point level static responses and catch blocks along
+with the array of handlers.
+
+```yaml
+---
+version: 1.0.0
+revision: 1
+name: cfg
+mount-points:
+  default:
+    handlers:
+      dir:
+        kind: static-dir
+        dir: "./dir"
+        priority: 5
+        rules:
+          - filter:
+              path: [ "index.html" ]
+            action: invoke
+      s3:
+        kind: s3-bucket
+        priority: 10
+        bucket:
+          name: my-test-bucket
+          region: us-west-2
+```
+
+When request is processed, Exogress builds the list of handlers ordered by priority for each mount point. It typically
+includes multiple active client configs (Exofile.yml) and a project-level config.
+
 ### upstreams
 
 ?> introduced in 1.0.0
 
 ?> Client only
 
-[comment]: <> (### handler)
+Upstream is the way to deliver the traffic to a running web servers.
 
-[comment]: <> (?> introduced in 1.0.0)
+Example upstream:
 
-[comment]: <> (?> Client & Project)
+```yaml
+upstreams:
+  upstream:
+    port: 3000
+    health-checks:
+      root:
+        kind: liveness
+        path: /health
+        timeout: 1s
+        period: 1s
+        expected-status-code: 200
+```
 
-[comment]: <> (Handler represents the particular step that Exogress edge server should perform. There are different kinds of handlers. Field `type` defines which handler should be used. There are a few common fields:)
+### Address
 
-[comment]: <> (- `base-path` and `replace-base-path`. See [URL Paths]&#40;/config-1_x_0?id=url-paths&#41;)
+Upstream body contains two keys which define how to reach the upstream:
 
-[comment]: <> (- `priority`. Gateway servers will apply handlers according to the priority. It starts from the smallest priority, moving to the larger values. Priority lives in a mount point, and the end ordering may include handlers from different configs.)
+```yaml
+port: 3000
+host: 192.168.1.2
+```
 
-[comment]: <> (- `filters` see [Filters secions]&#40;/config-1_x_0?id=filters&#41;)
+`port` is required, `host` may be avoided and is `127.0.0.1` by default. Exogress client typically runs on the same host
+with the web server, so `127.0.0.1` is the reasonable default for the most of the cases.
 
-[comment]: <> (#### static-dir)
+### Health checks
 
-[comment]: <> (?> introduced in 1.0.0)
+There may be multiple health checks defined on each upstream. Exogress client performs upstreams health checks and
+reports the result to the Exogress Cloud. Exogress gateways will not use the unhealthy upstream.
 
-[comment]: <> (?> Client only)
+For now there is only one health check kind: `liveness`. More kinds will be added in the future.
+`path` defines which path to query. `timeout` defines how long to wait for response. `period` defines how long to sleep
+between requests. Health check is treated successful if response matched the status-code matcher defined
+in `expected-status-code`. Requests headers may be defined in the `headers` object. `method` is responsible for HTTP
+method to use.
 
-[comment]: <> (Serve the static directory from the computer where the exogress client is running.)
+## Handler
 
-[comment]: <> (#### proxy)
+?> introduced in 1.0.0
 
-[comment]: <> (?> introduced in 1.0.0)
+?> Client & Project
 
-[comment]: <> (?> Client only)
+[See also](/config-1_x_0?id=handlers)
 
-[comment]: <> (Reverse proxy / Load Balancer handler. Forward requests to one of the defined [upstreams]&#40;/config-1_x_0?id=upstream&#41;)
+### `proxy`
 
-[comment]: <> (### upstreams)
+?> introduced in 1.0.0
 
-[comment]: <> (?> introduced in 1.0.0)
+?> Client
 
-[comment]: <> (?> Client only)
+Proxy handler forwards all traffic to the upstream.
 
-[comment]: <> (## Rules)
+```yaml
+kind: proxy
+upstream: upstream-name
+priority: 10
+```
 
-[comment]: <> (?> introduced in 1.0.0)
+### `static-dir`
 
-[comment]: <> (?> Client & Project)
+?> introduced in 1.0.0
 
-[comment]: <> (Rules may be defined on any handler— their goal is to provide behavior modifications on handler processing.)
+?> Client
 
-[comment]: <> (Rules example:)
+Forward the traffic to a running exogress client, which serves files from the local directory.
 
-[comment]: <> (```yaml)
+```yaml
+kind: static-dir
+dir: "./dir"
+priority: 10
+```
 
-[comment]: <> (mount-points:)
+### `s3-bucket`
 
-[comment]: <> (  my-mount-point:)
+?> introduced in 1.0.0
 
-[comment]: <> (    handlers:)
+?> Client & Project
 
-[comment]: <> (      backend:)
+Proxy requests to AWS S3 bucket.
 
-[comment]: <> (        kind: proxy)
+```yaml
+kind: s3-bucket
+priority: 10
+bucket:
+  name: my-test-bucket
+  region: us-west-2
+credentials:
+  secret_access_key: "..."
+  access_key_id: "..."
+```
 
-[comment]: <> (        upstream: server)
+Both `bucket` and `credentials` may be stored in parameters.
 
-[comment]: <> (        priority: 10)
+### `gcs-bucket`
 
-[comment]: <> (        rules:)
+?> introduced in 1.0.0
 
-[comment]: <> (          - filter:)
+?> Client & Project
 
-[comment]: <> (              path: ["static", "*"])
+Example:
 
-[comment]: <> (            action:)
+```yaml
+kind: gcs-bucket
+priority: 10
+bucket:
+  name: my-test-bucket
+credentials: "@gcs-creds"
+```
 
-[comment]: <> (              kind: next-handler)
+Both `bucket` and `credentials` may be stored in parameters.
 
-[comment]: <> (          - filter:)
+### `auth`
 
-[comment]: <> (              path: ["*"])
+?> introduced in 1.0.0
 
-[comment]: <> (            action:)
+?> Client & Project
 
-[comment]: <> (              kind: invoke)
+```yaml
+kind: auth
+github:
+  acl:
+    - allow: github-user
+google:
+  acl: "@google-acl"
+priority: 10
+```
 
-[comment]: <> (```)
+### `pass-through`
 
-[comment]: <> (`path` field is the [path with possible wildcards]&#40;/config-1_x_0?id=wildcards&#41;)
+?> introduced in 1.0.0
 
-[comment]: <> (Rules are processed from top to bottom. When the filter matches the requested one - the action is performed.)
+?> Client & Project
 
-[comment]: <> (There are a few types of actions:)
+```yaml
+kind: pass-through
+priority: 10
+```
 
-[comment]: <> (- `invoke`. Pass the request to the handler, where the rule is defined.)
+## Profiles
 
-[comment]: <> (- `next-handler`. Skip this handler and move on to the next one.)
+?> introduced in 1.0.0
 
-[comment]: <> (- `none`. Just skip this rule and move on to the next one. Will later be used for request modifications.)
+?> Client
 
-[comment]: <> (- `throw`. Throw the [exception]&#40;/config-1_x_0?id=exceptions&#41;.)
+Sometimes it makes sense to vary configuration depending on some conditions. For instance, we may want to use some
+handler only during the development, but skip it in production. Profiles may be used exactly for that.
 
-[comment]: <> (- `respond`. Respond with the [static response]&#40;/config-1_x_0?id=static-responses&#41;. `static-response` field defines the name of static response. This action will stop processing both rules and handlers)
+Exogress client accepts the `profile` configuration option to define which profile to use.
 
-[comment]: <> (and finish the whole chain with the response.)
+Some configuration blocks on the client config accepts the `profiles` array, to define on which profiles it should be
+active. In case if `profiles` is defined, the configuration block will be disabled by default, otherwise it will be
+enabled and not affected by selected profile.
 
+`profiles` is supported on the follow configuration blocks:
 
-[comment]: <> (## URL Paths)
+- Mount Point
+- Handler
+- Upstream
+- Rule
 
-[comment]: <> (?> introduced in 1.0.0)
+## Static Response handlebars, facts
 
-[comment]: <> (Exogress use array-based notation for representing paths. Instead of writing the path as a string &#40;/segment1/segment2&#41; it needs to written as an array: `["segment1", "segment2"]`.)
+## Cache
 
-[comment]: <> (This has a lot of benefits - better readability, good looking URL rewrites, and wildcard matching.)
+Edge cache may be enable and disable on per-handler basis. Exogress respects HTTP headers and will cache responses which
+contain the appropriate `Cache-Control` headers.
 
-[comment]: <> (### Wildcards)
+TODO: more about caching
 
-[comment]: <> (?> introduced in 1.0.0)
+Caching is disabled by default. Example config with enabled cache on the `proxy` handler.
 
-[comment]: <> (If the path may be written as a wildcard &#40;e.g., filter&#41;, special wildcard syntax may be used.)
+```yaml
+version: 1.0.0
+revision: 1
+name: proxy
+mount-points:
+  default:
+    handlers:
+      proxy:
+        kind: proxy
+        upstream: upstream
+        priority: 40
+        cache:
+          enabled: true
+upstreams:
+  upstream:
+    port: 11988
+```
 
-[comment]: <> (- Single wildcard segment: `["segment1", "?", "segment2"]`)
+## Post-Processing
 
-[comment]: <> (- Multiple wildcard segments: `["segment1", "*", "segment2"]`. Any number of segments may exist between the first and the last one. There may be only one `*` wildcard segment.)
+Exogress edge servers may perform the content optimization.
 
-[comment]: <> (- Regular expression: `["/segment\d+/"]`)
+### WebP
 
+WebP is an image format employing both lossy and lossless compression, along with animation and alpha transparency.
+Developed by Google, it is designed to create smaller or better looking images compared to the JPEG, PNG, or GIF image
+formats.
 
-[comment]: <> (## Exceptions)
+Exogress may perform the conversion of png and jpeg responses to WebP format. WebP is enabled by default. This is
+controlled on the handler level.
 
-[comment]: <> (?> introduced in 1.0.0)
+```yaml
+version: 1.0.0
+revision: 1
+name: proxy
+mount-points:
+  default:
+    handlers:
+      proxy:
+        kind: proxy
+        upstream: upstream
+        priority: 10
+        post-processing:
+          image:
+            webp:
+              enabled: true
+              jpeg: false
+              png: false
+upstreams:
+  upstream:
+    port: 11988
+```
 
-[comment]: <> (Exceptions are used to stop the processing chain. They may be caught by one of the `catch` blocks.)
+Note, that Exogress may skip optimizations on per-request basis, depending on many conditions. Typically requestss that
+are not eligible for caching will not be converted to WebP.
+
+## Modifications
+
