@@ -21,7 +21,7 @@ Handlers perform the actual work. Handlers are ordered by the `priority` field u
 
 Each handler contains the following fields:
 
-- `base-path` and `replace-base-path`. The handler may be placed under a different root. For instance, imaging you want to serve uploads from the S3 buckets under the path prefix `/uploads/`. Files in the S3 bucket are stored in the root dir, not prefixed with `/uploads`.
+- `base-path` and `replace-base-path`. The handler may be placed under a different root. For instance, imagine you want to serve uploads from the S3 buckets under the path prefix `/uploads/`. Files in the S3 bucket are stored in the root dir, not prefixed with `/uploads`.
 
 ```yaml
 uploads:
